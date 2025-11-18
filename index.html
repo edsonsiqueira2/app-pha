@@ -1,0 +1,421 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Análise Preliminar de Perigos (PHA) com Firebase</title>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+<!-- PDF -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
+
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; }
+.logo { width: 150px; margin-bottom: 20px; display:block; margin-left:auto; margin-right:auto; }
+#uploadLogo { margin-bottom: 10px; }
+table { border-collapse: collapse; width: 100%; margin-bottom: 30px; }
+th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+th { background-color: #f4f4f4; }
+.baixo { background-color: #d4efdf; }
+.medio { background-color: #f9e79f; }
+.alto { background-color: #f5b7b1; }
+input, textarea, select { width: 100%; padding: 8px; margin: 5px 0; }
+button { padding: 10px 20px; background-color: #3498db; color: white; border: none; cursor: pointer; margin-top: 10px; }
+button:hover { background-color: #2980b9; }
+.footer { text-align: center; font-size: 12px; margin-top: 40px; color: #555; }
+#loginDiv { max-width: 400px; margin:auto; }
+#appDiv { margin-top:20px; }
+.analiseItem { border:1px solid #ccc; padding:10px; margin-bottom:5px; cursor:pointer; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginDiv">
+  <h2>Login</h2>
+  <input type="email" id="email" placeholder="Email"><br>
+  <input type="password" id="password" placeholder="Senha"><br>
+  <button onclick="login()">Entrar</button>
+  <button onclick="signup()">Cadastrar</button>
+</div>
+
+<!-- APLICAÇÃO -->
+<div id="appDiv" style="display:none;">
+
+  <h2>Análise Preliminar de Perigos (PHA)</h2>
+  
+  <div id="pdf-content">
+    <div id="logoContainer">
+      <input type="file" id="uploadLogo" accept="image/*">
+      <img id="logo" class="logo" style="display:none;">
+    </div>
+
+    <label>Linha de Produção:</label>
+    <input type="text" id="linha" placeholder="Ex: Linha de enchimento estéril 01">
+
+    <label>Introdução:</label>
+    <textarea id="introducao" rows="3" placeholder="Digite a introdução da análise de risco..."></textarea>
+
+    <label>Objetivo:</label>
+    <textarea id="objetivo" rows="3" placeholder="Digite o objetivo da análise de risco..."></textarea>
+
+    <h3>Critérios de Classificação do Risco</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Critério</th>
+          <th>Baixo (1)</th>
+          <th>Médio (2)</th>
+          <th>Alto (3)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Duração da Intervenção</td>
+          <td>&lt; 30 segundos</td>
+          <td>30s – 2 minutos</td>
+          <td>&gt; 2 minutos</td>
+        </tr>
+        <tr>
+          <td>Frequência de Ocorrência</td>
+          <td>Menos de 1 vez por semana</td>
+          <td>1–3 vezes por semana</td>
+          <td>Diária ou em todos os lotes</td>
+        </tr>
+        <tr>
+          <td>Mitigação (Barreiras/Ferramentas)</td>
+          <td>Luvas acopladas com barreira física completa</td>
+          <td>Ferramentas estéreis, barreiras parciais</td>
+          <td>Sem barreiras ou contato direto com zona estéril</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Análise de risco das intervenções</h3>
+    <table id="matriz">
+      <thead>
+        <tr>
+          <th>Número</th>
+          <th>Intervenção</th>
+          <th>Duração</th>
+          <th>Frequência</th>
+          <th>Justificativa Duração</th>
+          <th>Justificativa Frequência</th>
+          <th>Contenção</th>
+          <th>Justificativa Contenção</th>
+          <th>Risco</th>
+          <th>Mitigação</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <label>Conclusão:</label>
+    <textarea id="conclusao" rows="3" placeholder="Digite a conclusão da análise de risco..."></textarea>
+
+    <h3>Adicionar Nova Intervenção</h3>
+    <label>Nome da Intervenção:</label>
+    <input type="text" id="nome">
+    <label>Duração:</label>
+    <select id="duracao">
+      <option>Baixo</option>
+      <option>Médio</option>
+      <option>Alto</option>
+    </select>
+    <label>Frequência:</label>
+    <select id="frequencia">
+      <option>Baixo</option>
+      <option>Médio</option>
+      <option>Alto</option>
+    </select>
+    <label>Contenção:</label>
+    <select id="contencao">
+      <option>Baixo</option>
+      <option>Médio</option>
+      <option>Alto</option>
+    </select>
+
+    <button onclick="adicionarIntervencao()">Adicionar à Matriz</button>
+    <button onclick="gerarPDF()">Exportar PDF</button>
+    <button onclick="salvarAnalise()">Salvar Análise</button>
+  </div>
+
+  <h3>Histórico de Análises</h3>
+  <div id="historicoAnalises"></div>
+
+</div>
+
+<script>
+// ================== FIREBASE ==================
+const firebaseConfig = {
+  apiKey: "SUA_API_KEY",
+  authDomain: "SEU_AUTH_DOMAIN",
+  projectId: "SEU_PROJECT_ID",
+  storageBucket: "SEU_STORAGE_BUCKET",
+  messagingSenderId: "SEU_MESSAGING_SENDER_ID",
+  appId: "SEU_APP_ID"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+// ========== AUTENTICAÇÃO ==========
+function signup() {
+  const email = document.getElementById("email").value;
+  const password = document.getElementById("password").value;
+  auth.createUserWithEmailAndPassword(email, password)
+    .then(()=>alert("Usuário criado!"))
+    .catch(e=>alert(e.message));
+}
+
+function login() {
+  const email = document.getElementById("email").value;
+  const password = document.getElementById("password").value;
+  auth.signInWithEmailAndPassword(email, password)
+    .then(()=> {
+      document.getElementById("loginDiv").style.display = "none";
+      document.getElementById("appDiv").style.display = "block";
+      loadAnalises();
+    })
+    .catch(e=>alert(e.message));
+}
+
+// ================== LOGO ==================
+document.getElementById("uploadLogo").addEventListener("change", function () {
+  const file = this.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    localStorage.setItem("logoBase64", e.target.result);
+    mostrarLogo(e.target.result);
+  };
+  reader.readAsDataURL(file);
+});
+
+function mostrarLogo(base64) {
+  const logo = document.getElementById("logo");
+  logo.src = base64;
+  logo.style.display = "block";
+  document.getElementById("uploadLogo").style.display = "none";
+}
+
+// ================== MATRIZ ==================
+function cruzamentoNRP(duracao, frequencia) {
+  const mapa = {
+    Baixo: { Baixo: "Baixo", Médio: "Baixo", Alto: "Médio" },
+    Médio: { Baixo: "Baixo", Médio: "Médio", Alto: "Alto" },
+    Alto:  { Baixo: "Médio", Médio: "Alto", Alto: "Alto" }
+  };
+  return mapa[duracao][frequencia];
+}
+
+function cruzamentoNPR(nrp, contencao) {
+  const mapa = {
+    Baixo: { Baixo: "Baixo", Médio: "Baixo", Alto: "Médio" },
+    Médio: { Baixo: "Baixo", Médio: "Médio", Alto: "Alto" },
+    Alto:  { Baixo: "Médio", Médio: "Alto", Alto: "Alto" }
+  };
+  return mapa[nrp][contencao];
+}
+
+function corClasse(risco) {
+  if (risco === "Baixo") return "baixo";
+  if (risco === "Médio") return "medio";
+  return "alto";
+}
+
+function editarJustificativa(btn){
+  const cell = btn.parentElement;
+  const textoAtual = cell.innerText.replace('✏️','').trim();
+  const input = document.createElement('textarea');
+  input.value = textoAtual==='-'?'':textoAtual;
+  input.rows = 2; input.style.width='100%';
+  cell.innerHTML=''; cell.appendChild(input);
+  input.focus();
+  input.addEventListener('blur', function(){
+    cell.innerHTML = input.value || '-';
+    const editBtn = document.createElement('button');
+    editBtn.textContent='✏️';
+    editBtn.onclick = function(){ editarJustificativa(editBtn); };
+    cell.appendChild(editBtn);
+  });
+}
+
+function adicionarIntervencao() {
+  const nome = document.getElementById("nome").value;
+  const duracao = document.getElementById("duracao").value;
+  const frequencia = document.getElementById("frequencia").value;
+  const contencao = document.getElementById("contencao").value;
+
+  const nrp = cruzamentoNRP(duracao, frequencia);
+  const npr = cruzamentoNPR(nrp, contencao);
+
+  let mitigacao = "NA";
+  if (npr==="Médio" && confirm("Comitê julga necessária ação de mitigação?")){
+    mitigacao = prompt("Descreva mitigação:")||"NA";
+  }
+  else if (npr==="Alto"){
+    mitigacao = prompt("Risco ALTO! Descreva mitigação obrigatória:");
+    if(!mitigacao||mitigacao.trim()===""){ alert("Mitigação obrigatória!"); return; }
+  }
+
+  const tabela = document.getElementById("matriz").getElementsByTagName('tbody')[0];
+  const linha = tabela.insertRow();
+  linha.innerHTML = `
+    <td></td>
+    <td>${nome}</td>
+    <td>${duracao}</td>
+    <td>${frequencia}</td>
+    <td>- <button onclick="editarJustificativa(this)">✏️</button></td>
+    <td>- <button onclick="editarJustificativa(this)">✏️</button></td>
+    <td>${contencao}</td>
+    <td>- <button onclick="editarJustificativa(this)">✏️</button></td>
+    <td class="${corClasse(npr)}">${npr}</td>
+    <td>${mitigacao}</td>
+    <td><button onclick="editarLinha(this)">Editar</button> <button onclick="excluirLinha(this)">Excluir</button></td>
+  `;
+  atualizarNumeros();
+}
+
+function atualizarNumeros() {
+  const tabela = document.getElementById("matriz").getElementsByTagName('tbody')[0];
+  for(let i=0; i<tabela.rows.length; i++){ tabela.rows[i].cells[0].innerText = i+1; }
+}
+
+function editarLinha(btn){
+  const linha = btn.parentElement.parentElement;
+  document.getElementById("nome").value = linha.cells[1].innerText;
+  document.getElementById("duracao").value = linha.cells[2].innerText;
+  document.getElementById("frequencia").value = linha.cells[3].innerText;
+  document.getElementById("contencao").value = linha.cells[6].innerText;
+  linha.remove(); atualizarNumeros();
+}
+
+function excluirLinha(btn){
+  btn.parentElement.parentElement.remove(); atualizarNumeros();
+}
+
+// ================== FIRESTORE ==================
+function salvarAnalise(){
+  const user = auth.currentUser;
+  if(!user) return alert("Usuário não logado");
+
+  const linha = document.getElementById("linha").value;
+  const introducao = document.getElementById("introducao").value;
+  const objetivo = document.getElementById("objetivo").value;
+  const conclusao = document.getElementById("conclusao").value;
+
+  const tabelaHTML = document.getElementById("matriz").getElementsByTagName('tbody')[0].rows;
+  let intervencoes = [];
+  for(let i=0;i<tabelaHTML.length;i++){
+    const row = tabelaHTML[i].cells;
+    intervencoes.push({
+      numero:i+1, nome:row[1].innerText, duracao:row[2].innerText, frequencia:row[3].innerText,
+      justificativaDuracao:row[4].innerText, justificativaFrequencia:row[5].innerText,
+      contencao:row[6].innerText, justificativaContencao:row[7].innerText,
+      risco:row[8].innerText, mitigacao:row[9].innerText
+    });
+  }
+
+  db.collection("analises").add({
+    usuario: user.uid, linha, introducao, objetivo, conclusao, intervencoes,
+    criadoEm: new Date()
+  })
+  .then(()=>{ alert("Análise salva!"); loadAnalises(); })
+  .catch(e=>alert(e.message));
+}
+
+function loadAnalises(){
+  const user = auth.currentUser;
+  const historicoDiv = document.getElementById("historicoAnalises");
+  historicoDiv.innerHTML = "";
+  db.collection("analises").where("usuario","==",user.uid)
+    .orderBy("criadoEm","desc")
+    .get()
+    .then(snapshot=>{
+      snapshot.forEach(doc=>{
+        const data = doc.data();
+        const div = document.createElement("div");
+        div.className="analiseItem";
+        div.innerText=`Linha: ${data.linha} - Criado em: ${data.criadoEm.toDate().toLocaleString()}`;
+        div.onclick = ()=> loadAnalise(doc.id);
+        historicoDiv.appendChild(div);
+      });
+    });
+}
+
+function loadAnalise(id){
+  db.collection("analises").doc(id).get().then(doc=>{
+    if(!doc.exists) return alert("Análise não encontrada");
+    const data = doc.data();
+    document.getElementById("linha").value=data.linha;
+    document.getElementById("introducao").value=data.introducao;
+    document.getElementById("objetivo").value=data.objetivo;
+    document.getElementById("conclusao").value=data.conclusao;
+    const tbody = document.getElementById("matriz").getElementsByTagName('tbody')[0];
+    tbody.innerHTML="";
+    data.intervencoes.forEach(item=>{
+      const linha = tbody.insertRow();
+      linha.innerHTML=`
+        <td>${item.numero}</td>
+        <td>${item.nome}</td>
+        <td>${item.duracao}</td>
+        <td>${item.frequencia}</td>
+        <td>${item.justificativaDuracao} <button onclick="editarJustificativa(this)">✏️</button></td>
+        <td>${item.justificativaFrequencia} <button onclick="editarJustificativa(this)">✏️</button></td>
+        <td>${item.contencao}</td>
+        <td>${item.justificativaContencao} <button onclick="editarJustificativa(this)">✏️</button></td>
+        <td class="${corClasse(item.risco)}">${item.risco}</td>
+        <td>${item.mitigacao}</td>
+        <td><button onclick="editarLinha(this)">Editar</button> <button onclick="excluirLinha(this)">Excluir</button></td>
+      `;
+    });
+    atualizarNumeros();
+  });
+}
+
+// ================== PDF ==================
+function gerarPDF() {
+  const logo = localStorage.getItem("logoBase64");
+  const linha = document.getElementById("linha").value;
+  const introducao = document.getElementById("introducao").value;
+  const objetivo = document.getElementById("objetivo").value;
+  const conclusao = document.getElementById("conclusao").value;
+
+  const tabelaHTML = document.getElementById("matriz").getElementsByTagName('tbody')[0].rows;
+  let matrizPDF = [["Número","Intervenção","Duração","Frequência","Justificativa Duração","Justificativa Frequência","Contenção","Justificativa Contenção","Risco","Mitigação"]];
+  for(let i=0;i<tabelaHTML.length;i++){
+    const row=tabelaHTML[i].cells;
+    matrizPDF.push([i+1,row[1].innerText,row[2].innerText,row[3].innerText,row[4].innerText,row[5].innerText,row[6].innerText,row[7].innerText,row[8].innerText,row[9].innerText]);
+  }
+
+  const docDefinition = {
+    content:[
+      logo?{image:logo,width:150,alignment:'center'}:{},
+      {text:'\nAnálise Preliminar de Perigos (PHA)',style:'header',alignment:'center'},
+      {text:`Linha de Produção: ${linha}\n`,style:'subheader'},
+      {text:'Introdução:\n'+introducao+'\n'},
+      {text:'Objetivo:\n'+objetivo+'\n'},
+      {text:'Matriz de Risco:',style:'subheader'},
+      {table:{headerRows:1,body:matrizPDF},layout:'lightHorizontalLines'},
+      {text:'Conclusão:\n'+conclusao+'\n'}
+    ],
+    styles:{header:{fontSize:16,bold:true},subheader:{fontSize:14,bold:true}}
+  };
+
+  pdfMake.createPdf(docDefinition).download(`PHA_${linha.replace(/\s+/g,'_')}.pdf`);
+}
+</script>
+
+<div class="footer">
+&copy; 2025 PHA Sistema. Todos os direitos reservados.
+</div>
+
+</body>
+</html>
